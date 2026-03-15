@@ -405,6 +405,29 @@ func TestInertia_Render(t *testing.T) {
 			})
 		})
 
+		t.Run("flash", func(t *testing.T) {
+			t.Parallel()
+
+			w, r := requestMock(http.MethodGet, "/home")
+			asInertiaRequest(r)
+
+			ctx := SetFlash(r.Context(), Flash{"message": "Saved", "newUserId": 123})
+
+			err := I().Render(w, r.WithContext(ctx), "Some/Component", Props{
+				"abc": "123",
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+
+			assertable := AssertFromString(t, w.Body.String())
+			assertable.AssertProps(Props{
+				"abc":    "123",
+				"errors": map[string]any{},
+			})
+			assertable.AssertFlash(Flash{"message": "Saved", "newUserId": float64(123)})
+		})
+
 		t.Run("history encryption", func(t *testing.T) {
 			t.Parallel()
 
@@ -997,6 +1020,53 @@ func TestInertia_Location(t *testing.T) {
 
 				if !reflect.DeepEqual(flashProvider.errors, errors) {
 					t.Fatalf("got validation errors=%#v, want=%#v", flashProvider.errors, errors)
+				}
+			})
+		})
+
+		t.Run("arbitrary flash", func(t *testing.T) {
+			t.Parallel()
+
+			t.Run("plain redirect", func(t *testing.T) {
+				t.Parallel()
+
+				w, r := requestMock(http.MethodGet, "/")
+
+				flashProvider := &flashProviderMock{}
+
+				i := I(func(i *Inertia) {
+					i.flash = flashProvider
+				})
+
+				flash := Flash{"message": "Saved", "newUserId": 123}
+
+				r = r.WithContext(SetFlash(r.Context(), flash))
+				i.Location(w, r, "/foo")
+
+				if !reflect.DeepEqual(flashProvider.flash, flash) {
+					t.Fatalf("got flash=%#v, want=%#v", flashProvider.flash, flash)
+				}
+			})
+
+			t.Run("inertia location", func(t *testing.T) {
+				t.Parallel()
+
+				w, r := requestMock(http.MethodGet, "/")
+				asInertiaRequest(r)
+
+				flashProvider := &flashProviderMock{}
+
+				i := I(func(i *Inertia) {
+					i.flash = flashProvider
+				})
+
+				flash := Flash{"message": "Saved", "newUserId": 123}
+
+				r = r.WithContext(SetFlash(r.Context(), flash))
+				i.Location(w, r, "/foo", http.StatusMovedPermanently)
+
+				if !reflect.DeepEqual(flashProvider.flash, flash) {
+					t.Fatalf("got flash=%#v, want=%#v", flashProvider.flash, flash)
 				}
 			})
 		})
